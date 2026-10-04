@@ -116,12 +116,23 @@ class Probe:
             return 2
 
         edition = "KENG (LICENSE_SERVERS set)" if os.environ.get("LICENSE_SERVERS") else "Community Edition"
-        try:
-            self.api.set_config(self.build_config())
-            self.record("licence_ports", PASS, f"{edition}: {self.n} x 1GE accepted")
-        except Exception as e:
-            self.record("licence_ports", FAIL, f"{edition}: set_config rejected {self.n} ports: {e}")
-            return 1
+        # Engines keep resetting gRPC for a while after deploy, so retry set_config
+        # until ready; a licence/capacity rejection is final and is not retried.
+        cfg, deadline = self.build_config(), time.time() + a.timeout
+        while True:
+            try:
+                self.api.set_config(cfg)
+                self.record("licence_ports", PASS, f"{edition}: {self.n} x 1GE accepted")
+                break
+            except Exception as e:
+                msg = str(e)
+                if "licen" in msg.lower() or "capacity" in msg.lower():
+                    self.record("licence_ports", FAIL, f"{edition}: {self.n} ports rejected: {msg}")
+                    return 1
+                if time.time() > deadline:
+                    self.record("engines_ready", FAIL, f"set_config still failing after {a.timeout}s: {msg}")
+                    return 1
+                time.sleep(5)
 
         try:
             self.set_state("protocol", True)
