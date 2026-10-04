@@ -106,6 +106,16 @@ class Probe:
             per = {"error": str(e)}
         return load1, per
 
+    def gw_diag(self):
+        """Snapshot gateway forwarding state so a failed run explains itself."""
+        cmd = ("sysctl net.ipv4.ip_forward; ip -br addr; ip neigh; ip -s -br link; "
+               "vtysh -c 'show ip route' 2>&1")
+        try:
+            return subprocess.run(["docker", "exec", "clab-evpn-p0-gw", "sh", "-c", cmd],
+                                  capture_output=True, text=True, timeout=30).stdout
+        except Exception as e:
+            return f"diag failed: {e}"
+
     # ---- checks ----------------------------------------------------------
     def run(self):
         a = self.args
@@ -161,6 +171,8 @@ class Probe:
                 except Exception as e:
                     print(f"cleanup: stop {kind} failed: {e}", file=sys.stderr)
 
+        if not done or any(m.frames_tx != m.frames_rx for m in fm):
+            self.diag = self.gw_diag()
         if not done:
             self.record("traffic_completes", FAIL, err)
         tx = sum(m.frames_tx for m in fm)
@@ -187,13 +199,17 @@ class Probe:
         os.makedirs(out, exist_ok=True)
         verdict = {0: "GO", 1: "NO-GO", 2: "PROBE ERROR"}[rc]
         data = {"verdict": verdict, "ports": self.n, "args": vars(self.args),
-                "checks": self.checks, "flows": getattr(self, "metrics", [])}
+                "checks": self.checks, "flows": getattr(self, "metrics", []),
+                "gw_diag": getattr(self, "diag", None)}
         with open(os.path.join(out, "report.json"), "w") as f:
             json.dump(data, f, indent=2)
         rows = "\n".join(f"| {c['check']} | {c['status']} | {c['detail']} |" for c in self.checks)
         with open(os.path.join(out, "report.md"), "w") as f:
             f.write(f"# Phase 0 probe: {verdict}\n\nPorts: {self.n}\n\n"
                     f"| Check | Status | Detail |\n|---|---|---|\n{rows}\n")
+            if getattr(self, "diag", None):
+                f.write(f"\n## Gateway diagnostics\n\n```\n{self.diag}\n```\n")
+                print(self.diag)
         print(f"\nVerdict: {verdict}  ->  {out}/report.md")
 
 

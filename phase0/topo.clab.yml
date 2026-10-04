@@ -34,6 +34,9 @@ topology:
       binds:
         - gw/frr.conf:/etc/frr/frr.conf
         - gw/vtysh.conf:/etc/frr/vtysh.conf
+      exec:
+        # new netns starts with forwarding off; zebra's `ip forwarding` is not enough on its own
+        - sysctl -w net.ipv4.ip_forward=1
     te1:
       group: te
       ports: ["5555:5555", "50071:50071"]
