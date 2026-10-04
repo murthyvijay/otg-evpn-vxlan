@@ -1,0 +1,34 @@
+name: ci
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install -q pyflakes pyyaml -r requirements.txt
+      - run: python -m pyflakes phase0/
+      - run: python -c "import yaml,sys; [yaml.safe_load(open(f)) for f in sys.argv[1:]]" phase0/topo.clab.yml .github/workflows/ci.yml
+
+  phase0-ce:
+    # Community Edition smoke run (4 ports); the 8-port KENG run is local only.
+    needs: lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: make install
+      - run: make preflight PORTS=4
+      - run: make deploy PORTS=4
+      - run: make probe PORTS=4
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase0-report
+          path: results/
+          if-no-files-found: ignore
+      - if: always()
+        run: make clean

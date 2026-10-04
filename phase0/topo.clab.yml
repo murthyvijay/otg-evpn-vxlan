@@ -1,0 +1,109 @@
+# Phase 0 feasibility probe: 8 Ixia-c ports (te+pe pairs) around one FRR gateway.
+# Image tags come from versions.env (exported by the Makefile).
+# PORTS=4 deploys te1-4 only (CE / CI) via containerlab --node-filter.
+name: evpn-p0
+topology:
+  groups:
+    te:
+      kind: linux
+      image: ${IXIA_C_TE}
+      env:
+        ARG_IFACE_LIST: virtual@af_packet,eth1
+        OPT_NO_HUGEPAGES: "Yes"
+        OPT_NO_PINNING: "Yes"
+        OPT_ADAPTIVE_CPU_USAGE: "Yes"
+        WAIT_FOR_IFACE: "Yes"
+    pe:
+      kind: linux
+      image: ${IXIA_C_PE}
+      startup-delay: 5
+      env:
+        INTF_LIST: eth1
+  nodes:
+    ixc:
+      kind: linux
+      image: ${KENG_CONTROLLER}
+      network-mode: host
+      cmd: --accept-eula --http-port 8443
+      env:
+        # empty => Community Edition; set to the license server IP for KENG
+        LICENSE_SERVERS: ${LICENSE_SERVERS:=}
+    gw:
+      kind: linux
+      image: ${FRR_IMAGE}
+      binds:
+        - gw/frr.conf:/etc/frr/frr.conf
+        - gw/vtysh.conf:/etc/frr/vtysh.conf
+    te1:
+      group: te
+      ports: ["5555:5555", "50071:50071"]
+      env:
+        OPT_LISTEN_PORT: 5555
+    pe1:
+      group: pe
+      network-mode: container:te1
+    te2:
+      group: te
+      ports: ["5556:5556", "50072:50071"]
+      env:
+        OPT_LISTEN_PORT: 5556
+    pe2:
+      group: pe
+      network-mode: container:te2
+    te3:
+      group: te
+      ports: ["5557:5557", "50073:50071"]
+      env:
+        OPT_LISTEN_PORT: 5557
+    pe3:
+      group: pe
+      network-mode: container:te3
+    te4:
+      group: te
+      ports: ["5558:5558", "50074:50071"]
+      env:
+        OPT_LISTEN_PORT: 5558
+    pe4:
+      group: pe
+      network-mode: container:te4
+    te5:
+      group: te
+      ports: ["5559:5559", "50075:50071"]
+      env:
+        OPT_LISTEN_PORT: 5559
+    pe5:
+      group: pe
+      network-mode: container:te5
+    te6:
+      group: te
+      ports: ["5560:5560", "50076:50071"]
+      env:
+        OPT_LISTEN_PORT: 5560
+    pe6:
+      group: pe
+      network-mode: container:te6
+    te7:
+      group: te
+      ports: ["5561:5561", "50077:50071"]
+      env:
+        OPT_LISTEN_PORT: 5561
+    pe7:
+      group: pe
+      network-mode: container:te7
+    te8:
+      group: te
+      ports: ["5562:5562", "50078:50071"]
+      env:
+        OPT_LISTEN_PORT: 5562
+    pe8:
+      group: pe
+      network-mode: container:te8
+  links:
+    - endpoints: ["te1:eth1", "gw:eth1"]
+    - endpoints: ["te2:eth1", "gw:eth2"]
+    - endpoints: ["te3:eth1", "gw:eth3"]
+    - endpoints: ["te4:eth1", "gw:eth4"]
+    - endpoints: ["te5:eth1", "gw:eth5"]
+    - endpoints: ["te6:eth1", "gw:eth6"]
+    - endpoints: ["te7:eth1", "gw:eth7"]
+    - endpoints: ["te8:eth1", "gw:eth8"]
