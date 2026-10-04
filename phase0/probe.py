@@ -79,7 +79,11 @@ class Probe:
                 f = cfg.flows.add(name=f"p{s}>p{d}")
                 f.tx_rx.device.tx_names = [f"d{s}.ip"]
                 f.tx_rx.device.rx_names = [f"d{d}.ip"]
-                f.packet.ethernet().ipv4()
+                # only eth.dst is auto-resolved (ARP); src MAC and IPs default to zeros
+                eth, ip, udp = f.packet.ethernet().ipv4().udp()
+                eth.src.value = f"02:00:00:00:{s:02x}:02"
+                ip.src.value, ip.dst.value = f"10.0.{s}.2", f"10.0.{d}.2"
+                udp.src_port.value, udp.dst_port.value = 1024 + s, 4791
                 f.size.fixed = self.args.size
                 f.rate.pps = self.args.pps
                 f.duration.fixed_packets.packets = pkts
@@ -108,8 +112,8 @@ class Probe:
 
     def gw_diag(self):
         """Snapshot gateway forwarding state so a failed run explains itself."""
-        cmd = ("sysctl net.ipv4.ip_forward; ip -br addr; ip neigh; ip -s -br link; "
-               "vtysh -c 'show ip route' 2>&1")
+        cmd = ("sysctl net.ipv4.ip_forward; ip -br addr; ip neigh; ip -s link; "
+               "nstat -az 2>/dev/null | grep -E 'Forw|InAddrErr|InHdrErr|InDiscard|OutNoRoute'; vtysh -c 'show ip route' 2>&1")
         try:
             return subprocess.run(["docker", "exec", "clab-evpn-p0-gw", "sh", "-c", cmd],
                                   capture_output=True, text=True, timeout=30).stdout
